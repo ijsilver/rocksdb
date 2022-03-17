@@ -24,6 +24,9 @@
 #include "util/rate_limiter.h"
 
 namespace ROCKSDB_NAMESPACE {
+
+std::atomic<int> num_threads;
+
 Options SanitizeOptions(const std::string& dbname, const Options& src,
                         bool read_only) {
   auto db_options = SanitizeOptions(dbname, DBOptions(src), read_only);
@@ -1570,6 +1573,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
                     const std::vector<ColumnFamilyDescriptor>& column_families,
                     std::vector<ColumnFamilyHandle*>* handles, DB** dbptr,
                     const bool seq_per_batch, const bool batch_per_txn) {
+  num_threads = 0;
   Status s = ValidateOptionsByTable(db_options, column_families);
   if (!s.ok()) {
     return s;

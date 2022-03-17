@@ -124,7 +124,8 @@ class WritableFileWriter {
   std::string file_name_;
   FSWritableFilePtr writable_file_;
   SystemClock* clock_;
-  AlignedBuffer buf_;
+  AlignedBuffer *buf_;
+
   size_t max_buffer_size_;
   // Actually written data size can be used for truncate
   // not counting padding data
@@ -160,7 +161,7 @@ class WritableFileWriter {
       : file_name_(_file_name),
         writable_file_(std::move(file), io_tracer, _file_name),
         clock_(clock),
-        buf_(),
+        buf_(nullptr),
         max_buffer_size_(options.writable_file_max_buffer_size),
         filesize_(0),
 #ifndef ROCKSDB_LITE
@@ -179,8 +180,10 @@ class WritableFileWriter {
         buffered_data_with_checksum_(buffered_data_with_checksum) {
     TEST_SYNC_POINT_CALLBACK("WritableFileWriter::WritableFileWriter:0",
                              reinterpret_cast<void*>(max_buffer_size_));
-    buf_.Alignment(writable_file_->GetRequiredBufferAlignment());
-    buf_.AllocateNewBuffer(std::min((size_t)65536, max_buffer_size_));
+    buf_ = new AlignedBuffer;
+    buf_->Alignment(writable_file_->GetRequiredBufferAlignment());
+    buf_->AllocateNewBuffer(std::min((size_t)65536, max_buffer_size_));
+
 #ifndef ROCKSDB_LITE
     std::for_each(listeners.begin(), listeners.end(),
                   [this](const std::shared_ptr<EventListener>& e) {
@@ -242,7 +245,7 @@ class WritableFileWriter {
 
   bool use_direct_io() { return writable_file_->use_direct_io(); }
 
-  bool TEST_BufferIsEmpty() { return buf_.CurrentSize() == 0; }
+  bool TEST_BufferIsEmpty() { return buf_->CurrentSize() == 0; }
 
   void TEST_SetFileChecksumGenerator(
       FileChecksumGenerator* checksum_generator) {
