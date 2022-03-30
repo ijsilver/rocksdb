@@ -21,6 +21,16 @@
 #include "util/rate_limiter.h"
 
 namespace ROCKSDB_NAMESPACE {
+
+static void thread_reader_(RandomAccessFileReader* reader, const IOOptions& opts, uint64_t rounddown_offset,
+                           uint64_t chunk_len, size_t read_len, Slice* result,
+                           AlignedBuffer* buffer_, bool for_compaction){ 
+
+  Status ret = reader->Read(opts, rounddown_offset + chunk_len, read_len, result,
+              buffer_->BufferStart() + chunk_len, nullptr, for_compaction);
+  assert(ret == Status::OK());
+}
+
 Status FilePrefetchBuffer::Prefetch(const IOOptions& opts,
                                     RandomAccessFileReader* reader,
                                     uint64_t offset, size_t n,
@@ -86,11 +96,28 @@ Status FilePrefetchBuffer::Prefetch(const IOOptions& opts,
     buffer_.RefitTail(static_cast<size_t>(chunk_offset_in_buffer),
                       static_cast<size_t>(chunk_len));
   }
-
+  
   Slice result;
   size_t read_len = static_cast<size_t>(roundup_len - chunk_len);
-  s = reader->Read(opts, rounddown_offset + chunk_len, read_len, &result,
+#if 1 
+  if(for_compaction){
+    size_t div_len = read_len / 4;
+    for(int i=0;i<4;i++){ 
+      read_thread_pool_.push_back(std::thread(thread_reader_, reader, opts, rounddown_offset, chunk_len, 
+                                                              div_len, &result, &buffer_, for_compaction));
+    }
+    for(auto& thread : read_thread_pool_){
+      thread.join();
+    }
+    
+    read_thread_pool_.clear();
+    s = Status::OK(); 
+ } 
+  else
+#endif
+    s = reader->Read(opts, rounddown_offset + chunk_len, read_len, &result,
                    buffer_.BufferStart() + chunk_len, nullptr, for_compaction);
+  
   if (!s.ok()) {
     return s;
   }
