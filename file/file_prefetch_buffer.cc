@@ -19,8 +19,21 @@
 #include "test_util/sync_point.h"
 #include "util/random.h"
 #include "util/rate_limiter.h"
+#include "logging/log_buffer.h"
+#include "logging/logging.h"
 
 namespace ROCKSDB_NAMESPACE {
+
+extern std::shared_ptr<Logger> _logger;
+
+static void thread_reader_(RandomAccessFileReader* reader, const IOOptions& opts, uint64_t rounddown_offset,
+                           uint64_t chunk_len, size_t read_len, Slice* result,
+                                                      AlignedBuffer* buffer_, bool for_compaction, int i){
+  Status ret = reader->Read(opts, rounddown_offset + chunk_len + (read_len*i), read_len, result,
+                  buffer_->BufferStart() + chunk_len + (read_len*i), nullptr, for_compaction);
+  assert(ret == Status::OK());
+}
+
 Status FilePrefetchBuffer::Prefetch(const IOOptions& opts,
                                     RandomAccessFileReader* reader,
                                     uint64_t offset, size_t n,
@@ -89,8 +102,26 @@ Status FilePrefetchBuffer::Prefetch(const IOOptions& opts,
 
   Slice result;
   size_t read_len = static_cast<size_t>(roundup_len - chunk_len);
-  s = reader->Read(opts, rounddown_offset + chunk_len, read_len, &result,
+  int R_NUM = 1;
+  if (for_compaction) {
+    ROCKS_LOG_INFO(_logger,"%s prefetch start!!", reader->file_name().c_str());
+    size_t div_len = read_len / R_NUM;
+    for(int i=0;i<R_NUM;i++){ 
+      read_thread_pool_.push_back(std::thread(thread_reader_, reader, opts, rounddown_offset, chunk_len, 
+            div_len, &result, &buffer_, for_compaction, i));
+    }
+    for(auto& thread : read_thread_pool_){
+      thread.join();
+    }
+
+    ROCKS_LOG_INFO(_logger,"%s prefetch end!!", reader->file_name().c_str());
+    read_thread_pool_.clear();
+    s = Status::OK(); 
+  } 
+  else {
+    s = reader->Read(opts, rounddown_offset + chunk_len, read_len, &result,
                    buffer_.BufferStart() + chunk_len, nullptr, for_compaction);
+  }
   if (!s.ok()) {
     return s;
   }
@@ -103,7 +134,7 @@ Status FilePrefetchBuffer::Prefetch(const IOOptions& opts,
   }
 #endif
   buffer_offset_ = rounddown_offset;
-  buffer_.Size(static_cast<size_t>(chunk_len) + result.size());
+  buffer_.Size(static_cast<size_t>(chunk_len) + (result.size()*R_NUM));
   return s;
 }
 

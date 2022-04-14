@@ -68,6 +68,8 @@
 
 namespace ROCKSDB_NAMESPACE {
 
+extern std::shared_ptr<Logger> _logger;
+
 extern const uint64_t kBlockBasedTableMagicNumber;
 extern const std::string kHashIndexPrefixesBlock;
 extern const std::string kHashIndexPrefixesMetadataBlock;

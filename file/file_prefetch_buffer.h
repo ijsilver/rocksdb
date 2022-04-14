@@ -11,6 +11,8 @@
 #include <atomic>
 #include <sstream>
 #include <string>
+#include <vector>
+#include <thread>
 
 #include "file/random_access_file_reader.h"
 #include "port/port.h"
@@ -23,6 +25,7 @@ namespace ROCKSDB_NAMESPACE {
 // FilePrefetchBuffer is a smart buffer to store and read data from a file.
 class FilePrefetchBuffer {
  public:
+  std::vector<std::thread> read_thread_pool_;
   static const int kMinNumFileReadsToStartAutoReadahead = 2;
   // Constructor.
   //
