@@ -26,6 +26,7 @@ namespace ROCKSDB_NAMESPACE {
 class FilePrefetchBuffer {
  public:
   std::vector<std::thread> read_thread_pool_;
+  std::thread thread_;
   static const int kMinNumFileReadsToStartAutoReadahead = 2;
   // Constructor.
   //
@@ -66,7 +67,17 @@ class FilePrefetchBuffer {
         implicit_auto_readahead_(implicit_auto_readahead),
         prev_offset_(0),
         prev_len_(0),
-        num_file_reads_(kMinNumFileReadsToStartAutoReadahead + 1) {}
+        num_file_reads_(kMinNumFileReadsToStartAutoReadahead + 1) {
+          buffer_ = new AlignedBuffer;
+          buffer_2 = new AlignedBuffer;
+          buffer_3 = new AlignedBuffer;
+          buffer_2->Alignment(4096);
+          buffer_2->AllocateNewBuffer(15*1024*1024);
+          }
+
+  ~FilePrefetchBuffer() {
+      if(thread_.joinable()) thread_.join();
+    }
 
   // Load data into the buffer from a file.
   // reader : the file reader.
@@ -76,6 +87,8 @@ class FilePrefetchBuffer {
   Status Prefetch(const IOOptions& opts, RandomAccessFileReader* reader,
                   uint64_t offset, size_t n, bool for_compaction = false);
 
+//  Status Prefetch2(const IOOptions& opts, RandomAccessFileReader* reader,
+//                  uint64_t offset, size_t n, bool for_compaction, AlignedBuffer *buf_);
   // Tries returning the data for a file raed from this buffer, if that data is
   // in the buffer.
   // It handles tracking the minimum read offset if track_min_offset = true.
@@ -107,9 +120,16 @@ class FilePrefetchBuffer {
     readahead_size_ = initial_readahead_size_;
   }
 
+  bool get_enable_() { return enable_; }
+  uint64_t get_buffer_offset_() { return buffer_offset_; }
+  void set_buffer_offset_(uint64_t input) { buffer_offset_ = input; }
  private:
-  AlignedBuffer buffer_;
   uint64_t buffer_offset_;
+  bool enable_;
+  AlignedBuffer *buffer_;
+  AlignedBuffer *buffer_2;
+  AlignedBuffer *buffer_3;
+
   RandomAccessFileReader* file_reader_;
   size_t readahead_size_;
   size_t max_readahead_size_;
@@ -118,7 +138,6 @@ class FilePrefetchBuffer {
   size_t min_offset_read_;
   // if false, TryReadFromCache() always return false, and we only take stats
   // for track_min_offset_ if track_min_offset_ = true
-  bool enable_;
   // If true, track minimum `offset` ever passed to TryReadFromCache(), which
   // can be fetched from min_offset_read().
   bool track_min_offset_;
