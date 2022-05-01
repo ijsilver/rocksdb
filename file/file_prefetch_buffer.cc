@@ -73,7 +73,8 @@ Status FilePrefetchBuffer::Prefetch(const IOOptions& opts,
       chunk_offset_in_buffer =
           Rounddown(static_cast<size_t>(offset - buffer_offset_), alignment);
       chunk_len = buffer_.CurrentSize() - chunk_offset_in_buffer;
-      assert(chunk_offset_in_buffer % alignment == 0);
+      assert(chunk_offset_in_buffer % alignment == 0); 
+      ROCKS_LOG_INFO(_logger,"chunk len is fuck! offset = %ld, buffer_offset_ = %ld, buffer_.cursize = %ld chunk_len = %ld, alignment = %ld, chunk_offset_in_buffer = %ld",offset, buffer_offset_, buffer_.CurrentSize(), chunk_len, alignment, chunk_offset_in_buffer);
       assert(chunk_len % alignment == 0);
       assert(chunk_offset_in_buffer + chunk_len <=
              buffer_offset_ + buffer_.CurrentSize());
@@ -105,15 +106,23 @@ Status FilePrefetchBuffer::Prefetch(const IOOptions& opts,
   int R_NUM = 1;
   if (for_compaction) {
     ROCKS_LOG_INFO(_logger,"%s prefetch start!!", reader->file_name().c_str());
-    size_t div_len = read_len / R_NUM;
-    for(int i=0;i<R_NUM;i++){ 
-      read_thread_pool_.push_back(std::thread(thread_reader_, reader, opts, rounddown_offset, chunk_len, 
-            div_len, &result, &buffer_, for_compaction, i));
+    if(read_len%R_NUM == 0){
+      size_t div_len = read_len / R_NUM;
+#if 1
+      for(int i=0;i<R_NUM;i++){ 
+        read_thread_pool_.push_back(std::thread(thread_reader_, reader, opts, rounddown_offset, chunk_len, 
+              div_len, &result, &buffer_, for_compaction, i));
+      }
+      for(auto& thread : read_thread_pool_){
+        thread.join();
+      }
+      read_thread_pool_.clear();
+#endif
     }
-    for(auto& thread : read_thread_pool_){
-      thread.join();
+    else{
+      ROCKS_LOG_INFO(_logger,"read_len%R_NUM =! 0  read_len = %ld, R_NUM = %d", read_len, R_NUM);
+      thread_reader_(reader, opts, rounddown_offset, chunk_len, read_len, &result, &buffer_, for_compaction, 0);
     }
-
     ROCKS_LOG_INFO(_logger,"%s prefetch end!!", reader->file_name().c_str());
     read_thread_pool_.clear();
     s = Status::OK(); 
