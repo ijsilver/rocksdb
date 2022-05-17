@@ -159,7 +159,7 @@ Status FilePrefetchBuffer::Prefetch(const IOOptions& opts,
     if(buffer_->CurrentSize() == 0 && buffer_2->CurrentSize() == 0) {
       ROCKS_LOG_INFO(_logger,"%s cold miss", reader->file_name().c_str());
       Prefetch2(this, opts, reader, offset, n, for_compaction, buffer_);
-      thread_ = std::thread(background_read, this, opts, reader, offset+buffer_->CurrentSize(), n, buffer_2);
+      thread_ = std::thread(background_read, this, opts, reader, buffer_offset_+buffer_->CurrentSize(), n, buffer_2);
     }
     else if(buffer_->CurrentSize() > 0 && offset >= buffer_offset_ &&
             offset <= buffer_offset_ + buffer_->CurrentSize()) { //buffer_ hit
@@ -192,12 +192,12 @@ Status FilePrefetchBuffer::Prefetch(const IOOptions& opts,
     }
     else if(offset >= buffer_offset_ + buffer_->CurrentSize()){ 
       ROCKS_LOG_INFO(_logger,"%s buffer_2 fullf hit", reader->file_name().c_str());
-      thread_ = std::thread(background_read, this, opts, reader, offset, n, buffer_2);
       if(thread_.joinable()) thread_.join();
       //swap
       buffer_3 = buffer_2;
       buffer_ = buffer_3;
       buffer_2 = buffer_3;
+      thread_ = std::thread(background_read, this, opts, reader, buffer_offset_+buffer_->CurrentSize(), n, buffer_2);
       return Status::OK();
     }
 #endif
