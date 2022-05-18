@@ -342,7 +342,7 @@ bool Compaction::IsTrivialMove() const {
     const auto compaction_size =
         file->fd.GetFileSize() + TotalFileSize(file_grand_parents);
     if (compaction_size > max_compaction_bytes_) {
-      return false;
+//      return false;
     }
 
     if (partitioner.get() != nullptr) {

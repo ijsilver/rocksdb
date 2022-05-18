@@ -27,6 +27,7 @@ class FilePrefetchBuffer {
  public:
   std::vector<std::thread> read_thread_pool_;
   std::thread thread_;
+  std::vector<std::thread> back_thread_pool_;
   static const int kMinNumFileReadsToStartAutoReadahead = 2;
   // Constructor.
   //
@@ -72,11 +73,16 @@ class FilePrefetchBuffer {
           buffer_2 = new AlignedBuffer;
           buffer_3 = new AlignedBuffer;
           buffer_2->Alignment(4096);
-          buffer_2->AllocateNewBuffer(15*1024*1024);
+          buffer_2->AllocateNewBuffer(30*1024*1024);
           }
 
   ~FilePrefetchBuffer() {
-      if(thread_.joinable()) thread_.join();
+      if(thread_.joinable()){
+         thread_.join();
+      }
+      delete buffer_->Release();
+      delete buffer_2->Release();
+      delete buffer_3->Release();
     }
 
   // Load data into the buffer from a file.

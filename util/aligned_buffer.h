@@ -172,6 +172,7 @@ public:
 
     bufstart_ = new_bufstart;
     capacity_ = new_capacity;
+//    delete buf_.release();
     buf_.reset(new_buf);
   }
 
