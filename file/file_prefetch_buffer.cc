@@ -103,7 +103,7 @@ static void Prefetch2(FilePrefetchBuffer* p_buffer, const IOOptions& opts,
 
   Slice result;
   size_t read_len = static_cast<size_t>(roundup_len - chunk_len);
-  int R_NUM = 1;
+  int R_NUM = 16;
   
   if(read_len%R_NUM == 0){
 //    ROCKS_LOG_INFO(_logger,"%s prefetch start!!", reader->file_name().c_str());
