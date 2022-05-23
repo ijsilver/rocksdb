@@ -86,6 +86,8 @@ class CompactionJob {
       std::string full_history_ts_low = "",
       BlobFileCompletionCallback* blob_callback = nullptr);
 
+
+  DBImpl* dbimpl_;
   virtual ~CompactionJob();
 
   // no copy/move

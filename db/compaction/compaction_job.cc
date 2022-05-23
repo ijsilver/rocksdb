@@ -1394,6 +1394,9 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
                                           next_key);
       RecordDroppedKeys(range_del_out_stats,
                         &sub_compact->compaction_job_stats);
+      //add to NeedsCompaction
+      dbimpl_->SchedulePendingCompaction(cfd);
+      dbimpl_->MaybeScheduleFlushOrCompaction();
     }
   }
 

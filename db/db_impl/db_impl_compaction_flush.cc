@@ -3219,6 +3219,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
         is_manual ? manual_compaction->canceled : nullptr, db_id_,
         db_session_id_, c->column_family_data()->GetFullHistoryTsLow(),
         &blob_callback_);
+    compaction_job.dbimpl_ = this;
     compaction_job.Prepare();
 
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,

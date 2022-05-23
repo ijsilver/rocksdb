@@ -135,6 +135,8 @@ class Directories {
 // divided in several db_impl_*.cc files, besides db_impl.cc.
 class DBImpl : public DB {
  public:
+  void SchedulePendingCompaction(ColumnFamilyData* cfd);
+  void MaybeScheduleFlushOrCompaction();
   DBImpl(const DBOptions& options, const std::string& dbname,
          const bool seq_per_batch = false, const bool batch_per_txn = true,
          bool read_only = false);
@@ -1747,7 +1749,7 @@ class DBImpl : public DB {
 
   ColumnFamilyData* GetColumnFamilyDataByName(const std::string& cf_name);
 
-  void MaybeScheduleFlushOrCompaction();
+//  void MaybeScheduleFlushOrCompaction();
 
   // A flush request specifies the column families to flush as well as the
   // largest memtable id to persist for each column family. Once all the
@@ -1762,7 +1764,7 @@ class DBImpl : public DB {
 
   void SchedulePendingFlush(const FlushRequest& req, FlushReason flush_reason);
 
-  void SchedulePendingCompaction(ColumnFamilyData* cfd);
+//  void SchedulePendingCompaction(ColumnFamilyData* cfd);
   void SchedulePendingPurge(std::string fname, std::string dir_to_sync,
                             FileType type, uint64_t number, int job_id);
   static void BGWorkCompaction(void* arg);
