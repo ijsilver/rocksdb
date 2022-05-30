@@ -10,6 +10,7 @@
 #include "table/merging_iterator.h"
 #include <string>
 #include <vector>
+#include <thread>
 #include "db/dbformat.h"
 #include "db/pinned_iterators_manager.h"
 #include "memory/arena.h"
@@ -86,11 +87,22 @@ class MergingIterator : public InternalIterator {
 
   Status status() const override { return status_; }
 
+  static void c_seek(IteratorWrapper* child){
+        child->SeekToFirst(); 
+  }
+
   void SeekToFirst() override {
     ClearHeaps();
     status_ = Status::OK();
+    std::vector<std::thread> thread_pool_;
+    
     for (auto& child : children_) {
-      child.SeekToFirst();
+      thread_pool_.push_back(std::thread(c_seek, &child));
+    }
+    for(auto& thread:thread_pool_){
+        thread.join();
+    }
+    for (auto& child : children_) {
       AddToMinHeapOrCheckStatus(&child);
     }
     direction_ = kForward;
