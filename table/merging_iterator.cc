@@ -102,6 +102,7 @@ class MergingIterator : public InternalIterator {
     for(auto& thread:thread_pool_){
         thread.join();
     }
+    thread_pool_.clear();
     for (auto& child : children_) {
       AddToMinHeapOrCheckStatus(&child);
     }
