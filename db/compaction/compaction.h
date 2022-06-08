@@ -315,6 +315,11 @@ class Compaction {
   bool ShouldNotifyOnCompactionCompleted() const {
     return notify_on_compaction_completion_;
   }
+  std::vector<CompactionInputFiles> inputs_2;
+  void copy_vec() {
+    inputs_2.clear(); 
+    inputs_2.assign(inputs_.begin(), inputs_.end());
+  }
 
  private:
   // mark (or clear) all files that are being compacted

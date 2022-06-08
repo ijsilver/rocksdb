@@ -470,6 +470,55 @@ bool LevelCompactionBuilder::PickFileToCompact() {
       start_level_inputs_.clear();
       continue;
     }
+#if 1
+    if(!output_level_inputs.empty()) {
+      bool same = false;
+      while(!same){
+        InternalKey o_smallest, o_largest;
+        int start_level_size = start_level_inputs_.files.size();
+        int output_level_size = output_level_inputs.files.size();
+        compaction_picker_->GetRange(output_level_inputs, &o_smallest, &o_largest);
+        vstorage_->GetOverlappingInputs(start_level_, &o_smallest, &o_largest,
+                                        &start_level_inputs_.files);
+        if(start_level_size != start_level_inputs_.files.size()){
+          //continue to outputlevel
+          if(!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,&start_level_inputs_) ||
+              compaction_picker_->FilesRangeOverlapWithCompaction({start_level_inputs_}, output_level_)){
+            start_level_inputs_.clear();
+            start_level_inputs_.files.push_back(f);
+            start_level_inputs_.level = start_level_;
+            break;
+          }
+          //outputlevel again
+          InternalKey s_smallest, s_largest;
+          compaction_picker_->GetRange(start_level_inputs_, &s_smallest, &s_largest);
+          vstorage_->GetOverlappingInputs(output_level_, &s_smallest, &s_largest,
+                                          &output_level_inputs.files);
+          if(output_level_size != output_level_inputs.files.size()){
+            if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
+                                                            &output_level_inputs)) {
+              //return to original start_level_inputs and output_level_inputs
+              start_level_inputs_.clear();
+              start_level_inputs_.files.push_back(f);
+              start_level_inputs_.level = start_level_;
+              output_level_inputs.level = output_level_;
+              vstorage_->GetOverlappingInputs(output_level_, &smallest, &largest,
+                                              &output_level_inputs.files);
+              break;
+            }
+          }
+          else{
+            same = true;
+            break;
+          }
+        }
+        else{
+          same = true;
+          break;
+        }
+      }
+    }
+#endif
     base_index_ = index;
     break;
   }

@@ -7,6 +7,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
+#define PrintKey false
+
 #include "db/compaction/compaction_job.h"
 
 #include <algorithm>
@@ -19,6 +21,7 @@
 #include <thread>
 #include <utility>
 #include <vector>
+#include <string>
 
 #include "db/blob/blob_counting_iterator.h"
 #include "db/blob/blob_file_addition.h"
@@ -72,6 +75,8 @@
 #include "util/string_util.h"
 
 namespace ROCKSDB_NAMESPACE {
+
+extern std::shared_ptr<Logger> _logger;
 
 const char* GetCompactionReasonString(CompactionReason compaction_reason) {
   switch (compaction_reason) {
@@ -1160,6 +1165,26 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   CompactionRangeDelAggregator range_del_agg(&cfd->internal_comparator(),
                                              existing_snapshots_);
 
+  
+//  const std::vector<CompactionInputFiles>* tmp = this->compact_->compaction->inputs();
+#if 0
+  dbimpl_->mutex()->Lock();
+  this->compact_->compaction->copy_vec();
+  dbimpl_->mutex()->Unlock();
+  for(auto& input:this->compact_->compaction->inputs_2){
+    for(const auto& file:input.files){ 
+      dbimpl_->mutex()->Lock();
+      for(int i=0;i<8;i++)
+        ROCKS_LOG_INFO(_logger,"job_%d %d input samllest key = %02X", job_id_, i, file->smallest.Encode().data_[i]);
+      dbimpl_->mutex()->Unlock();
+
+      dbimpl_->mutex()->Lock();
+      for(int i=0;i<8;i++)
+        ROCKS_LOG_INFO(_logger,"job_%d %d input largest key = %02X", job_id_, i, file->largest.Encode().data_[i]);
+      dbimpl_->mutex()->Unlock();
+    }
+  }
+#endif
   const Slice* const start = sub_compact->start;
   const Slice* const end = sub_compact->end;
 
@@ -1214,7 +1239,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     blob_counter.reset(
         new BlobCountingIterator(input, sub_compact->blob_garbage_meter.get()));
     input = blob_counter.get();
-  }
+  } 
 
   input->SeekToFirst();
 
@@ -1300,11 +1325,31 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
           : sub_compact->compaction->CreateSstPartitioner();
   std::string last_key_for_partitioner;
 
+#if 0
+  ROCKS_LOG_INFO(_logger,"job_%d time_micros %llu Compaction start", job_id_, db_options_.clock->NowMicros());
+#endif
+  int k=0;
+
+#if 0
+  dbimpl_->mutex()->Lock();
+  for(int i=0;i<8;i++)
+    ROCKS_LOG_INFO(_logger,"job_%d %d first key = %02X", job_id_, i, c_iter->key().data_[i]);
+  dbimpl_->mutex()->Unlock();
+#endif 
   while (status.ok() && !cfd->IsDropped() && c_iter->Valid()) {
+    k++;
     // Invariant: c_iter.status() is guaranteed to be OK if c_iter->Valid()
     // returns true.
     const Slice& key = c_iter->key();
     const Slice& value = c_iter->value();
+
+#if 0
+    std::string str_ = "";
+    dbimpl_->mutex()->Lock();
+    for(int i=0;i<8;i++)
+      str_ += c_iter->key().data_[i];
+    dbimpl_->mutex()->Unlock();
+#endif
 
     assert(!end ||
            cfd->user_comparator()->Compare(c_iter->user_key(), *end) < 0);
@@ -1323,10 +1368,16 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         break;
       }
     }
+
+    //write
+//    ROCKS_LOG_INFO(_logger,"job_%d time_micros %llu Write start", job_id_, db_options_.clock->NowMicros());
+   
     status = sub_compact->AddToBuilder(key, value);
     if (!status.ok()) {
       break;
     }
+//    ROCKS_LOG_INFO(_logger,"job_%d time_micros %llu Write end", job_id_,db_options_.clock->NowMicros());
+    //write end
 
     status = sub_compact->ProcessOutFlowIfNeeded(key, value);
     if (!status.ok()) {
@@ -1355,6 +1406,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       // (1) this key terminates the file. For historical reasons, the iterator
       // status before advancing will be given to FinishCompactionOutputFile().
       output_file_ended = true;
+//      ROCKS_LOG_INFO(_logger,"job_%d over the maxcompactionbytes", job_id_);
     }
     TEST_SYNC_POINT_CALLBACK(
         "CompactionJob::Run():PausingManualCompaction:2",
@@ -1364,18 +1416,27 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       last_key_for_partitioner.assign(c_iter->user_key().data_,
                                       c_iter->user_key().size_);
     }
+
+    //Practical Compaction
+//    ROCKS_LOG_INFO(_logger,"job_%d time_micros %llu next start", job_id_, db_options_.clock->NowMicros());
     c_iter->Next();
     if (c_iter->status().IsManualCompactionPaused()) {
       break;
     }
+      
+//    ROCKS_LOG_INFO(_logger,"job_%d time_micros %llu next end", job_id_, db_options_.clock->NowMicros());
+    //Compaction End
+#if 1 
     if (!output_file_ended && c_iter->Valid()) {
       if (((partitioner.get() &&
             partitioner->ShouldPartition(PartitionerRequest(
                 last_key_for_partitioner, c_iter->user_key(),
-                sub_compact->current_output_file_size)) == kRequired) ||
-           (sub_compact->compaction->output_level() != 0 &&
+                sub_compact->current_output_file_size)) == kRequired))){
+        output_file_ended = true;
+      }      
+      if((sub_compact->compaction->output_level() != 0 &&
             sub_compact->ShouldStopBefore(
-                c_iter->key(), sub_compact->current_output_file_size))) &&
+                c_iter->key(), sub_compact->current_output_file_size)) &&
           sub_compact->builder != nullptr) {
         // (2) this key belongs to the next file. For historical reasons, the
         // iterator status after advancing will be given to
@@ -1383,6 +1444,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         output_file_ended = true;
       }
     }
+#endif
     if (output_file_ended) {
       const Slice* next_key = nullptr;
       if (c_iter->Valid()) {
@@ -1394,11 +1456,33 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
                                           next_key);
       RecordDroppedKeys(range_del_out_stats,
                         &sub_compact->compaction_job_stats);
+#if 0
       //add to NeedsCompaction
+      dbimpl_->mutex()->Lock();
       dbimpl_->SchedulePendingCompaction(cfd);
       dbimpl_->MaybeScheduleFlushOrCompaction();
+      dbimpl_->mutex()->Unlock();
+#endif
+      
+#if 0 
+      dbimpl_->mutex()->Lock();
+      for(int i=0;i<8;i++)
+        ROCKS_LOG_INFO(_logger,"job_%d %d last key = %02X", job_id_, i, str_[i]);
+      
+      dbimpl_->mutex()->Unlock();
+      
+      if(next_key != nullptr)
+        dbimpl_->mutex()->Lock();
+        for(int i=0;i<8;i++)
+          ROCKS_LOG_INFO(_logger,"job_%d %d next first key = %02X", job_id_, i, next_key->data_[i]);
+        dbimpl_->mutex()->Unlock();
+      ROCKS_LOG_INFO(_logger,"job_%d time_micros %llu output_file_ended", job_id_, db_options_.clock->NowMicros());
+#endif
     }
   }
+
+//compaction end
+
 
   sub_compact->compaction_job_stats.num_blobs_read =
       c_iter_stats.num_blobs_read;
@@ -1517,6 +1601,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   clip.reset();
   raw_input.reset();
   sub_compact->status = status;
+//  ROCKS_LOG_INFO(_logger,"k = %d job_%d time_micros %llu Compaction end", k, job_id_, db_options_.clock->NowMicros());
 }
 
 uint64_t CompactionJob::GetCompactionId(SubcompactionState* sub_compact) {
@@ -1623,6 +1708,12 @@ Status CompactionJob::FinishCompactionOutputFile(
       // subcompaction ends.
       upper_bound = sub_compact->end;
     }
+/*
+    if(sub_compact->start !=nullptr)
+      ROCKS_LOG_INFO(_logger,"job_%d lower_bound = %02X", job_id_, sub_compact->start->data_);
+    if(sub_compact->end !=nullptr)
+      ROCKS_LOG_INFO(_logger,"job_%d upper_bound = %02X", job_id_, sub_compact->end->data_);
+*/
     auto earliest_snapshot = kMaxSequenceNumber;
     if (existing_snapshots_.size() > 0) {
       earliest_snapshot = existing_snapshots_[0];
